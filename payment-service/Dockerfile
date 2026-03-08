@@ -1,13 +1,13 @@
-#Dockerfile for the Payment Service
 FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package.json .
+COPY package*.json ./
+
 RUN npm install
 
 COPY src ./src
 
-EXPOSE 8080
+EXPOSE 8084
 
-CMD ["node","src/app.js"]
+CMD ["npm","start"]
