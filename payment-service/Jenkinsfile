@@ -1,0 +1,149 @@
+pipeline {
+
+    agent any
+
+    environment {
+
+        REGISTRY      = "gcr.io/ecommerce"
+        IMAGE_NAME    = "payment-service"
+        IMAGE_TAG     = "${BUILD_NUMBER}"
+        DOCKER_IMAGE  = "${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+        APP_REPO      = "https://github.com/company/payment-service"
+        GITOPS_REPO   = "https://github.com/company/gitops-repo.git"
+
+    }
+
+    options {
+        timestamps()
+    }
+
+    stages {
+
+        stage('Checkout Application Code') {
+
+            steps {
+                git branch: 'main',
+                    credentialsId: 'github-creds',
+                    url: "${APP_REPO}"
+            }
+
+        }
+
+        stage('Build Docker Image') {
+
+            steps {
+                sh """
+                docker build -t ${DOCKER_IMAGE} .
+                """
+            }
+
+        }
+
+        stage('Docker Login & Push Image') {
+
+            steps {
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'gcr-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+
+                    sh """
+                    echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin https://gcr.io
+                    docker push ${DOCKER_IMAGE}
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Clone GitOps Repository') {
+
+            steps {
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
+
+                    sh """
+                    rm -rf gitops-repo
+                    git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/company/gitops-repo.git
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Update Helm Values') {
+
+            steps {
+
+                sh """
+                sed -i "s/tag:.*/tag: \\"${IMAGE_TAG}\\"/" \
+                gitops-repo/helm/microservice-chart/values/payment-service.yaml
+                """
+
+            }
+
+        }
+
+        stage('Commit & Push GitOps Changes') {
+
+            steps {
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
+
+                    sh """
+                    cd gitops-repo
+
+                    git config user.email "jenkins@ci.com"
+                    git config user.name "jenkins"
+
+                    git add helm/microservice-chart/values/payment-service.yaml
+
+                    git commit -m "CI: update payment-service image ${IMAGE_TAG}" || echo "No changes"
+
+                    git push https://${GIT_USER}:${GIT_TOKEN}@github.com/company/gitops-repo.git main
+                    """
+
+                }
+
+            }
+
+        }
+
+        stage('Cleanup Local Docker Image') {
+
+            steps {
+                sh "docker rmi ${DOCKER_IMAGE} || true"
+            }
+
+        }
+
+    }
+
+    post {
+
+        success {
+            echo "✅ CI Pipeline Completed Successfully"
+        }
+
+        failure {
+            echo "❌ CI Pipeline Failed"
+        }
+
+    }
+
+}
