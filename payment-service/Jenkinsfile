@@ -34,7 +34,7 @@ pipeline {
 
             steps {
                 sh """
-                docker build -t ${DOCKER_IMAGE} .
+                docker build -t ${DOCKER_IMAGE} -f ecommerce-app/payment-service/Dockerfile ecommerce-app/payment-service
                 """
             }
 
