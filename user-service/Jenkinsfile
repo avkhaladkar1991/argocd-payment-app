@@ -11,7 +11,7 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/avkhaladkar1991/user-service.git'
+                git 'https://github.com/avkhaladkar1991/argocd-payment-app.git'
             }
         }
 
