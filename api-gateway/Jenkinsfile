@@ -1,0 +1,42 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "avkhaladkar1991/api-gateway"
+        IMAGE_TAG  = "${BUILD_NUMBER}"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/avkhaladkar1991/argocd-payment-app.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} api-gateway"
+            }
+        }
+
+        stage('Login') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
+                    sh "echo $PASS | docker login -u $USER --password-stdin"
+                }
+            }
+        }
+
+        stage('Push') {
+            steps {
+                sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+            }
+        }
+    }
+}
